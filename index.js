@@ -153,31 +153,45 @@ bot.onText(/^\/autodelete(@sticker_time_bot)?(\s+([^\s]+))?$/, (msg, match) => {
     }
 });
 
-bot.onText(/\/sleeptime (\d+)/, (msg, match) => {
+bot.onText(/^\/sleeptime(@sticker_time_bot)?(\s+([^\s]+))?$/, (msg, match) => {
     const chatId = msg.chat.id;
     // bot.sendMessage(chatId, match[0]+'  '+match[1]+'  '+match[2]+'  '+match[3])
-    if (match[1]) {
-        if (match[1] <= 23 && match[1] >= 0){
-            logger.info(chatId + ' set sleeptime to '+match[1]+':00');
-            bot.sendMessage(chatId, 'Set sleeptime to '+match[1]+':00');
-            data.sleeptime[chatId] = match[1]
+    if (match[3]) {
+        var num = parseInt(match[3], 10);
+        if (num <= 23 && num >= 0){
+            logger.info(chatId + ' set sleeptime to '+ num +':00');
+            bot.sendMessage(chatId, 'Set sleeptime to '+ num +':00');
+            data.sleeptime[chatId] = num;
             saveData();
         } else {
-            bot.sendMessage(chatId, match[1]+' is a invalid time, 0-23 expected');
+            bot.sendMessage(chatId, match[3]+' is a invalid time, 0-23 expected');
+        }
+    } else {
+        if (chatId in data.sleeptime) {
+            bot.sendMessage(chatId, "Current sleep time: " + data.sleeptime[chatId]);
+        } else {
+            bot.sendMessage(chatId, "Sleep time not set");
         }
     }
 });
 
-bot.onText(/\/waketime (\d+)/, (msg, match) => {
+bot.onText(/^\/waketime(@sticker_time_bot)?(\s+([^\s]+))?$/, (msg, match) => {
     const chatId = msg.chat.id;
-    if (match[1]) {
-        if (match[1] <= 23 && match[1] >= 0){
-            logger.info(chatId + ' set waketime to '+match[1]+':00');
-            bot.sendMessage(chatId, 'Set waketime to '+match[1]+':00');
-            data.waketime[chatId] = match[1]
+    if (match[3]) {
+        var num = parseInt(match[3], 10);
+        if (num <= 23 && num >= 0){
+            logger.info(chatId + ' set waketime to '+ num +':00');
+            bot.sendMessage(chatId, 'Set waketime to '+ num +':00');
+            data.waketime[chatId] = num;
             saveData();
         } else {
-            bot.sendMessage(chatId, match[1]+' is a invalid time, 0-23 expected');
+            bot.sendMessage(chatId, match[3]+' is a invalid time, 0-23 expected');
+        }
+    } else {
+        if (chatId in data.waketime) {
+            bot.sendMessage(chatId, "Current wake time: " + data.waketime[chatId]);
+        } else {
+            bot.sendMessage(chatId, "Wake time not set");
         }
     }
 });
@@ -234,27 +248,24 @@ var cron = new CronJob('0 * * * *', function() {
         }
         let hour = moment().tz(tz).hours();
 
-        if (data.sleeptime[id] && data.waketime[id]) {
-            sleep = parseInt(data.sleeptime[id], 10);
-            wake = parseInt(data.waketime[id], 10);
+        if (id in data.sleeptime && id in data.waketime) {
+            let sleep = data.sleeptime[id];
+            let wake = data.waketime[id];
             if (sleep < wake) {
                 if (hour > sleep && hour < wake) return;
             }
             if (sleep > wake) {
                 if (hour > sleep || hour < wake) return;
             }
-            if (hour == wake) {
-                bot.sendSticker(id, stickers[14])
-            }
         }
         bot.sendSticker(id, stickers[hour % 12]).then(message => {
-        let cid = message.chat.id;
-        let mid = message.message_id;
-        if (data.autodelete[cid] && data.lastid[cid]) {
-            bot.deleteMessage(cid, data.lastid[cid]);
-        }
-        data.lastid[cid] = mid;
-        saveData();
+            let cid = message.chat.id;
+            let mid = message.message_id;
+            if (data.autodelete[cid] && data.lastid[cid]) {
+                bot.deleteMessage(cid, data.lastid[cid]);
+            }
+            data.lastid[cid] = mid;
+            saveData();
         }).catch(error => {
             let query = error.response.request.uri.query;
             logger.error('[' + error.response.body.error_code + ']' + error.response.body.description);  // => 'ETELEGRAM'
@@ -262,7 +273,8 @@ var cron = new CronJob('0 * * * *', function() {
                (error.response.body.description.includes('blocked') ||
                 error.response.body.description.includes('kicked') ||
                 error.response.body.description.includes('not a member') ||
-                error.response.body.description.includes('chat not found'))) {
+                error.response.body.description.includes('chat not found') ||
+                error.response.body.description.includes('upgraded'))) {
                 let matches = query.match(/chat_id=(-?[0-9]*)&/);
                 if (matches && matches[1]) {
                     let cid = Number(matches[1]);
@@ -273,6 +285,8 @@ var cron = new CronJob('0 * * * *', function() {
                         delete data.tzmap[cid];
                         delete data.lastid[cid];
                         delete data.autodelete[cid];
+                        delete data.sleeptime[cid];
+                        delete data.waketime[cid];
                         saveData();
                     }
                 }
